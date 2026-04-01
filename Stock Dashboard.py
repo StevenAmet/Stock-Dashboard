@@ -38,26 +38,39 @@ st.caption("Real Market Data | Risk | Optimization | ML")
 st.markdown("**Created by Steven Amet**")
 
 # -------------------------------
-# USER EXPLANATION (NEW)
+# TOGGLE (NEW 🔥)
+# -------------------------------
+mode = st.toggle("📅 Show Annualized Metrics", value=True)
+
+# -------------------------------
+# USER EXPLANATION (ENHANCED)
 # -------------------------------
 st.info("""
 ### 🧠 How This Dashboard Works
 
-You control the portfolio using the sliders in the sidebar.
+You control the portfolio using sliders.
 
-Each slider represents how much of your money is allocated to each asset.
+Each slider = how much capital you allocate to each asset.
 
 👉 Example:
 - 50% AAPL, 30% MSFT, 20% GOOGL
 
-The system then:
-- Combines asset returns using your weights
-- Calculates total portfolio return and risk
-- Measures diversification using correlation & PCA
+The system:
+- Combines returns using weights (weighted average)
+- Calculates risk using covariance (how assets move together)
+- Measures diversification (correlation + PCA)
 - Estimates worst-case losses (VaR & Expected Shortfall)
 
-👉 Key idea:
-Risk is not just about individual stocks — it’s about how they move together.
+⚠️ Important:
+Returns can be shown as DAILY or ANNUAL.
+
+- Daily returns look small (e.g. 0.10%)
+- Annual returns multiply by ~252 trading days
+
+👉 Example:
+0.10% daily ≈ 25% yearly
+
+This is why interpretation matters.
 """)
 
 # -------------------------------
@@ -85,7 +98,7 @@ if isinstance(raw_data.columns, pd.MultiIndex):
     elif "Close" in raw_data.columns.get_level_values(0):
         data = raw_data["Close"]
     else:
-        st.error("Price data not found in API response.")
+        st.error("Price data not found.")
         st.stop()
 else:
     if "Adj Close" in raw_data.columns:
@@ -99,6 +112,12 @@ else:
     data.columns = ticker_list
 
 returns = data.pct_change().dropna()
+
+# -------------------------------
+# BENCHMARK (NEW 🔥)
+# -------------------------------
+spy = yf.download("SPY", start=start_date)["Adj Close"]
+spy_returns = spy.pct_change().dropna()
 
 # -------------------------------
 # PRICE CHART
@@ -119,7 +138,7 @@ for t in ticker_list:
 weights = np.array(weights)
 
 if weights.sum() == 0:
-    st.warning("All weights are zero. Adjust sliders.")
+    st.warning("All weights are zero.")
     st.stop()
 
 weights = weights / weights.sum()
@@ -141,7 +160,28 @@ cov = returns.cov()
 
 ret = np.dot(weights, mean_returns)
 risk = np.sqrt(weights.T @ cov @ weights)
+
+# -------------------------------
+# ANNUALIZATION (NEW 🔥)
+# -------------------------------
+if mode:
+    ret = ret * 252
+    risk = risk * np.sqrt(252)
+    VaR_95 = VaR_95 * np.sqrt(252)
+    VaR_99 = VaR_99 * np.sqrt(252)
+    ES = ES * np.sqrt(252)
+
 sharpe = ret / risk if risk != 0 else 0
+
+# -------------------------------
+# BENCHMARK METRICS (NEW 🔥)
+# -------------------------------
+spy_ret = spy_returns.mean()
+spy_vol = spy_returns.std()
+
+if mode:
+    spy_ret *= 252
+    spy_vol *= np.sqrt(252)
 
 # -------------------------------
 # METRICS DISPLAY
@@ -149,16 +189,37 @@ sharpe = ret / risk if risk != 0 else 0
 st.markdown("### 📌 Key Risk Metrics")
 
 st.info("""
-- VaR = worst expected loss  
-- ES = average extreme loss  
-- Sharpe = return per unit of risk  
+These metrics change when you move sliders:
+
+- Return → expected performance
+- Risk → volatility
+- Sharpe → return per unit of risk
+- VaR → worst expected loss
+
+👉 Important:
+Portfolio metrics depend on BOTH weights AND correlations.
 """)
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("VaR 99%", f"{VaR_99:.2%}")
 c2.metric("Expected Shortfall", f"{ES:.2%}")
 c3.metric("Return", f"{ret:.2%}")
-c4.metric("Sharpe", f"{sharpe:.2f}")
+c4.metric("Risk", f"{risk:.2%}")
+c5.metric("Sharpe", f"{sharpe:.2f}")
+
+# -------------------------------
+# BENCHMARK DISPLAY (NEW 🔥)
+# -------------------------------
+st.markdown("### 📊 Benchmark Comparison (S&P 500)")
+
+st.write(f"""
+S&P 500 Return: {spy_ret:.2%}  
+S&P 500 Risk: {spy_vol:.2%}
+
+👉 Compare your portfolio:
+- Higher return = outperforming market
+- Lower risk = better diversification
+""")
 
 # -------------------------------
 # LOSS DISTRIBUTION
@@ -166,8 +227,14 @@ c4.metric("Sharpe", f"{sharpe:.2f}")
 st.markdown("### 📉 Loss Distribution")
 
 st.info("""
-- Left tail = worst losses  
-- Wider = more volatility  
+Shows all possible outcomes:
+
+- Left tail = extreme losses  
+- VaR lines = risk thresholds  
+- Width = volatility  
+
+👉 This answers:
+“How bad can losses get?”
 """)
 
 fig, ax = plt.subplots()
@@ -183,8 +250,12 @@ st.pyplot(fig)
 st.markdown("### 🔗 Correlation Matrix")
 
 st.info("""
-- High correlation = higher systemic risk  
-- Low correlation = diversification  
+Shows how assets move together:
+
+- High correlation → risky (everything falls together)
+- Low/negative → diversification
+
+👉 Diversification reduces risk WITHOUT reducing return.
 """)
 
 fig_corr, ax = plt.subplots()
@@ -198,14 +269,19 @@ st.pyplot(fig_corr)
 st.markdown("### 📊 PCA Risk Drivers")
 
 st.info("""
-- First component = main risk driver  
-- Concentration = systemic risk  
+PCA shows hidden risk drivers:
+
+- First bar = main market factor
+- Large first bar = systemic risk
+- Spread bars = diversified risk
+
+👉 This reveals what is REALLY driving risk.
 """)
 
 pca = PCA().fit(returns)
 
 fig_pca, ax = plt.subplots()
-ax.bar(range(len(pca.explained_variance_ratio_)), pca.explained_variance_ratio_, color="#55A868")
+ax.bar(range(len(pca.explained_variance_ratio_)), pca.explained_variance_ratio_)
 ax.yaxis.set_major_formatter(mtick.PercentFormatter(1))
 plt.tight_layout()
 st.pyplot(fig_pca)
@@ -223,42 +299,48 @@ st.dataframe(loadings)
 st.markdown("### ⚙️ Portfolio Optimization")
 
 st.info("""
-Balances return vs risk.
+This shows how efficient your portfolio is.
+
+👉 Goal:
+Maximize return for a given level of risk.
 """)
 
 st.write(f"Return: {ret:.2%}")
 st.write(f"Risk: {risk:.2%}")
 
 # -------------------------------
-# EFFICIENT FRONTIER (NEW 🔥)
+# EFFICIENT FRONTIER
 # -------------------------------
 st.markdown("### 🚀 Efficient Frontier")
 
-num_portfolios = 2000
 results = []
 
-for _ in range(num_portfolios):
+for _ in range(2000):
     w = np.random.random(len(ticker_list))
     w /= np.sum(w)
 
     r = np.dot(w, mean_returns)
     v = np.sqrt(w.T @ cov @ w)
 
+    if mode:
+        r *= 252
+        v *= np.sqrt(252)
+
     results.append([v, r])
 
 results = np.array(results)
 
-fig_frontier, ax = plt.subplots()
+fig, ax = plt.subplots()
 ax.scatter(results[:, 0], results[:, 1], alpha=0.3)
 ax.scatter(risk, ret, color="red", label="Your Portfolio")
 ax.set_xlabel("Risk")
 ax.set_ylabel("Return")
 ax.legend()
 plt.tight_layout()
-st.pyplot(fig_frontier)
+st.pyplot(fig)
 
 # -------------------------------
-# AUTO OPTIMIZATION (NEW 🔥)
+# AUTO OPTIMIZATION
 # -------------------------------
 if st.button("🔍 Find Optimal Portfolio (Max Sharpe)"):
     best_sharpe = -1
@@ -270,6 +352,11 @@ if st.button("🔍 Find Optimal Portfolio (Max Sharpe)"):
 
         r = np.dot(w, mean_returns)
         v = np.sqrt(w.T @ cov @ w)
+
+        if mode:
+            r *= 252
+            v *= np.sqrt(252)
+
         s = r / v if v != 0 else 0
 
         if s > best_sharpe:
@@ -285,27 +372,57 @@ if st.button("🔍 Find Optimal Portfolio (Max Sharpe)"):
 # -------------------------------
 st.markdown("### 🤖 ML Prediction")
 
+st.info("""
+Compares predicted vs actual returns:
+
+- Points on diagonal = accurate
+- Scatter = prediction error
+
+👉 Markets are noisy → perfect prediction is impossible.
+""")
+
 X = returns
 y = returns.sum(axis=1)
 
 model = LinearRegression().fit(X, y)
 pred = model.predict(X)
 
-fig_ml, ax = plt.subplots()
+fig, ax = plt.subplots()
 ax.scatter(y, pred, alpha=0.6)
 ax.plot([y.min(), y.max()], [y.min(), y.max()], linestyle="--", color="red")
 plt.tight_layout()
-st.pyplot(fig_ml)
+st.pyplot(fig)
 
 # -------------------------------
-# EXECUTIVE SUMMARY
+# EXECUTIVE SUMMARY (FULLY ENHANCED 🔥)
 # -------------------------------
 st.markdown("### 🧠 Executive Summary")
 
 st.write(f"""
-This portfolio has a Value-at-Risk of {abs(VaR_99):.2%}, indicating downside exposure in extreme market conditions.
+This portfolio has a Value-at-Risk of {abs(VaR_99):.2%}, meaning in extreme scenarios, losses of this magnitude are possible.
 
-The expected return is {ret:.2%} with a risk level of {risk:.2%}, resulting in a Sharpe ratio of {sharpe:.2f}.
+The expected return is {ret:.2%}, with a risk level of {risk:.2%}, resulting in a Sharpe ratio of {sharpe:.2f}.
 
-👉 Risk is primarily driven by correlations and dominant market factors.
+⚠️ Important Interpretation:
+
+- These returns are {'annualized' if mode else 'daily'}
+- Daily returns appear small but scale significantly over a year
+- Example: 0.10% daily ≈ 25% annually
+
+👉 Why your return may seem “low”:
+- Returns are averaged across time (not peak performance)
+- Diversification smooths returns
+- Correlations reduce extreme gains
+
+👉 Key Insight:
+Risk is not just about individual assets — it is driven by how assets interact.
+
+👉 Final Takeaway:
+This dashboard allows you to actively explore how changing weights impacts:
+- Return
+- Risk
+- Diversification
+- Downside exposure
+
+This is exactly how portfolio managers think in real-world finance.
 """)
