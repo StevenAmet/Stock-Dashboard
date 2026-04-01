@@ -170,11 +170,39 @@ sharpe = ret / risk if risk != 0 else 0
 # -------------------------------
 # BENCHMARK METRICS 
 # -------------------------------
-if not spy_returns.empty:
-    spy_ret = spy_returns.mean()
-    spy_vol = spy_returns.std()
-else:
+spy_raw = yf.download("SPY", start=start_date)
+
+if spy_raw.empty:
+    spy_returns = pd.Series()
     spy_ret, spy_vol = 0, 0
+else:
+    if isinstance(spy_raw.columns, pd.MultiIndex):
+        if "Adj Close" in spy_raw.columns.get_level_values(0):
+            spy = spy_raw["Adj Close"]
+        elif "Close" in spy_raw.columns.get_level_values(0):
+            spy = spy_raw["Close"]
+        else:
+            spy_returns = pd.Series()
+            spy = None
+    else:
+        if "Adj Close" in spy_raw.columns:
+            spy = spy_raw["Adj Close"]
+        elif "Close" in spy_raw.columns:
+            spy = spy_raw["Close"]
+        else:
+            spy_returns = pd.Series()
+            spy = None
+
+    if spy is not None:
+        spy_returns = spy.pct_change().dropna()
+        spy_ret = spy_returns.mean()
+        spy_vol = spy_returns.std()
+
+        if mode:
+            spy_ret *= 252
+            spy_vol *= np.sqrt(252)
+    else:
+        spy_ret, spy_vol = 0, 0
 
 # -------------------------------
 # METRICS DISPLAY
@@ -203,7 +231,6 @@ c5.metric("Sharpe", f"{sharpe:.2f}")
 # -------------------------------
 # BENCHMARK 
 # -------------------------------
-spy_raw = yf.download("SPY", start=start_date)
 
 if spy_raw.empty:
     st.warning("SPY benchmark data not available.")
