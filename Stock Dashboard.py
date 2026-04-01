@@ -50,18 +50,32 @@ start_date = st.date_input("Start Date", pd.to_datetime("2020-01-01"))
 # -------------------------------
 # DATA
 # -------------------------------
-data = yf.download(ticker_list, start=start_date)
+raw_data = yf.download(ticker_list, start=start_date)
 
-# ✅ FIX: handle single ticker case
-if len(ticker_list) == 1:
-    data = data[["Adj Close"]]
-    data.columns = ticker_list
-else:
-    data = data["Adj Close"]
-
-if data.empty:
+if raw_data.empty:
     st.error("No data found. Check tickers.")
     st.stop()
+
+# ✅ HANDLE DIFFERENT COLUMN CASES
+if isinstance(raw_data.columns, pd.MultiIndex):
+    if "Adj Close" in raw_data.columns.get_level_values(0):
+        data = raw_data["Adj Close"]
+    elif "Close" in raw_data.columns.get_level_values(0):
+        data = raw_data["Close"]
+    else:
+        st.error("Price data not found in API response.")
+        st.stop()
+else:
+    # single ticker case
+    if "Adj Close" in raw_data.columns:
+        data = raw_data[["Adj Close"]]
+    elif "Close" in raw_data.columns:
+        data = raw_data[["Close"]]
+    else:
+        st.error("Price data not found.")
+        st.stop()
+
+    data.columns = ticker_list
 
 returns = data.pct_change().dropna()
 
