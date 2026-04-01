@@ -38,6 +38,29 @@ st.caption("Real Market Data | Risk | Optimization | ML")
 st.markdown("**Created by Steven Amet**")
 
 # -------------------------------
+# USER EXPLANATION (NEW)
+# -------------------------------
+st.info("""
+### 🧠 How This Dashboard Works
+
+You control the portfolio using the sliders in the sidebar.
+
+Each slider represents how much of your money is allocated to each asset.
+
+👉 Example:
+- 50% AAPL, 30% MSFT, 20% GOOGL
+
+The system then:
+- Combines asset returns using your weights
+- Calculates total portfolio return and risk
+- Measures diversification using correlation & PCA
+- Estimates worst-case losses (VaR & Expected Shortfall)
+
+👉 Key idea:
+Risk is not just about individual stocks — it’s about how they move together.
+""")
+
+# -------------------------------
 # INPUT
 # -------------------------------
 st.markdown("### 📊 Portfolio Input")
@@ -56,7 +79,6 @@ if raw_data.empty:
     st.error("No data found. Check tickers.")
     st.stop()
 
-# ✅ HANDLE DIFFERENT COLUMN CASES
 if isinstance(raw_data.columns, pd.MultiIndex):
     if "Adj Close" in raw_data.columns.get_level_values(0):
         data = raw_data["Adj Close"]
@@ -66,7 +88,6 @@ if isinstance(raw_data.columns, pd.MultiIndex):
         st.error("Price data not found in API response.")
         st.stop()
 else:
-    # single ticker case
     if "Adj Close" in raw_data.columns:
         data = raw_data[["Adj Close"]]
     elif "Close" in raw_data.columns:
@@ -97,7 +118,6 @@ for t in ticker_list:
 
 weights = np.array(weights)
 
-# ✅ FIX: prevent divide-by-zero
 if weights.sum() == 0:
     st.warning("All weights are zero. Adjust sliders.")
     st.stop()
@@ -121,8 +141,6 @@ cov = returns.cov()
 
 ret = np.dot(weights, mean_returns)
 risk = np.sqrt(weights.T @ cov @ weights)
-
-# ✅ FIX: avoid division by zero
 sharpe = ret / risk if risk != 0 else 0
 
 # -------------------------------
@@ -192,7 +210,6 @@ ax.yaxis.set_major_formatter(mtick.PercentFormatter(1))
 plt.tight_layout()
 st.pyplot(fig_pca)
 
-# PCA loadings
 loadings = pd.DataFrame(
     pca.components_,
     columns=returns.columns,
@@ -211,6 +228,57 @@ Balances return vs risk.
 
 st.write(f"Return: {ret:.2%}")
 st.write(f"Risk: {risk:.2%}")
+
+# -------------------------------
+# EFFICIENT FRONTIER (NEW 🔥)
+# -------------------------------
+st.markdown("### 🚀 Efficient Frontier")
+
+num_portfolios = 2000
+results = []
+
+for _ in range(num_portfolios):
+    w = np.random.random(len(ticker_list))
+    w /= np.sum(w)
+
+    r = np.dot(w, mean_returns)
+    v = np.sqrt(w.T @ cov @ w)
+
+    results.append([v, r])
+
+results = np.array(results)
+
+fig_frontier, ax = plt.subplots()
+ax.scatter(results[:, 0], results[:, 1], alpha=0.3)
+ax.scatter(risk, ret, color="red", label="Your Portfolio")
+ax.set_xlabel("Risk")
+ax.set_ylabel("Return")
+ax.legend()
+plt.tight_layout()
+st.pyplot(fig_frontier)
+
+# -------------------------------
+# AUTO OPTIMIZATION (NEW 🔥)
+# -------------------------------
+if st.button("🔍 Find Optimal Portfolio (Max Sharpe)"):
+    best_sharpe = -1
+    best_weights = None
+
+    for _ in range(3000):
+        w = np.random.random(len(ticker_list))
+        w /= np.sum(w)
+
+        r = np.dot(w, mean_returns)
+        v = np.sqrt(w.T @ cov @ w)
+        s = r / v if v != 0 else 0
+
+        if s > best_sharpe:
+            best_sharpe = s
+            best_weights = w
+
+    st.success("Optimal Weights Found:")
+    for t, w in zip(ticker_list, best_weights):
+        st.write(f"{t}: {w:.2%}")
 
 # -------------------------------
 # ML MODEL
