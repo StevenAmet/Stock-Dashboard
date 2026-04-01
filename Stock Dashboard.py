@@ -174,14 +174,13 @@ if mode:
 sharpe = ret / risk if risk != 0 else 0
 
 # -------------------------------
-# BENCHMARK METRICS (NEW 🔥)
+# BENCHMARK METRICS 
 # -------------------------------
-spy_ret = spy_returns.mean()
-spy_vol = spy_returns.std()
-
-if mode:
-    spy_ret *= 252
-    spy_vol *= np.sqrt(252)
+if not spy_returns.empty:
+    spy_ret = spy_returns.mean()
+    spy_vol = spy_returns.std()
+else:
+    spy_ret, spy_vol = 0, 0
 
 # -------------------------------
 # METRICS DISPLAY
@@ -208,18 +207,35 @@ c4.metric("Risk", f"{risk:.2%}")
 c5.metric("Sharpe", f"{sharpe:.2f}")
 
 # -------------------------------
-# BENCHMARK DISPLAY (NEW 🔥)
+# BENCHMARK 
 # -------------------------------
-st.markdown("### 📊 Benchmark Comparison (S&P 500)")
+spy_raw = yf.download("SPY", start=start_date)
 
-st.write(f"""
-S&P 500 Return: {spy_ret:.2%}  
-S&P 500 Risk: {spy_vol:.2%}
+if spy_raw.empty:
+    st.warning("SPY benchmark data not available.")
+    spy_returns = pd.Series()
+else:
+    if isinstance(spy_raw.columns, pd.MultiIndex):
+        if "Adj Close" in spy_raw.columns.get_level_values(0):
+            spy = spy_raw["Adj Close"]
+        elif "Close" in spy_raw.columns.get_level_values(0):
+            spy = spy_raw["Close"]
+        else:
+            st.warning("SPY price column not found.")
+            spy_returns = pd.Series()
+            spy = None
+    else:
+        if "Adj Close" in spy_raw.columns:
+            spy = spy_raw["Adj Close"]
+        elif "Close" in spy_raw.columns:
+            spy = spy_raw["Close"]
+        else:
+            st.warning("SPY price column not found.")
+            spy_returns = pd.Series()
+            spy = None
 
-👉 Compare your portfolio:
-- Higher return = outperforming market
-- Lower risk = better diversification
-""")
+    if spy is not None:
+        spy_returns = spy.pct_change().dropna()
 
 # -------------------------------
 # LOSS DISTRIBUTION
