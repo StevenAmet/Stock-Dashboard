@@ -424,5 +424,4 @@ This dashboard allows you to actively explore how changing weights impacts:
 - Diversification
 - Downside exposure
 
-This is exactly how portfolio managers think in real-world finance.
 """)
