@@ -114,12 +114,6 @@ else:
 returns = data.pct_change().dropna()
 
 # -------------------------------
-# BENCHMARK (NEW 🔥)
-# -------------------------------
-spy = yf.download("SPY", start=start_date)["Adj Close"]
-spy_returns = spy.pct_change().dropna()
-
-# -------------------------------
 # PRICE CHART
 # -------------------------------
 st.markdown("### 📈 Price Chart")
